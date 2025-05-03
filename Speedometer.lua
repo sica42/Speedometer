@@ -82,7 +82,6 @@ end
 
 function Speedometer.events.ZONE_CHANGED_NEW_AREA()
 	m.zone = GetRealZoneText()
-	print( m.zone )
 end
 
 function Speedometer.on_update()
