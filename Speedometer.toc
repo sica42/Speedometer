@@ -1,0 +1,9 @@
+## Interface: 11200
+## Title: Speedometer
+## Author: Sica
+## Version: 0.1
+## Notes: Shows your current running speed
+## SavedVariablesPerCharacter: SpeedometerDB
+
+Speedometer.lua
+Zones.lua
