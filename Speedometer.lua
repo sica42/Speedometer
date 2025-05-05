@@ -7,127 +7,158 @@ local m = Speedometer
 m.events = {}
 
 function Speedometer:init()
-	self.frame = CreateFrame( "Frame", "SpeedometerFrame", UIParent )
-	self.frame:SetScript( "OnEvent", function()
-		if m.events[ event ] then
-			m.events[ event ]()
-		end
-	end )
+	self.frame = self:create_frame()
 
-	for k, _ in pairs( m.events ) do
-		m.frame:RegisterEvent( k )
+	for k, _ in pairs( self.events ) do
+		self.frame:RegisterEvent( k )
 	end
 
-	m.speed_samples = {}
-	m.max_samples = 7
-	m.status_debounce = {
+	self.speed_samples = {}
+	self.max_samples = 5
+	self.in_combat = false
+	self.is_mounted = false
+	self.on_boat = nil
+	self.status_debounce = {
 		current = nil,
 		previous = nil,
 		candidate = nil,
 		start_time = 0,
 	}
+	self.api = getfenv( 0 )
+	self.db = {}
 
 	SLASH_SPEEDOMETER1 = "/sm"
 	SLASH_SPEEDOMETER2 = "/speedometer"
 	SlashCmdList[ "SPEEDOMETER" ] = Speedometer.handle_slash
+
+	self.dropdown = CreateFrame( "Frame", "SpeedometerDropdown", self.frame, "UIDropDownMenuTemplate" )
+	self.tooltip = CreateFrame( "GameTooltip", "SpeedometerTooltip", UIParent, "GameTooltipTemplate" )
+	self.tooltip:SetOwner( WorldFrame, "ANCHOR_NONE" )
 end
 
-function Speedometer.events.PLAYER_LOGIN()
+function Speedometer.events:PLAYER_LOGIN()
 	SpeedometerDB = SpeedometerDB or {}
-	m.db = SpeedometerDB
-	m.db.use_metric = m.db.use_metric or false
-	m.db.skin = m.db.skin or "Classic"
+	self.db = SpeedometerDB
+	if self.db.use_metric == nil then self.db.use_metric = false end
+	if self.db.show_status == nil then self.db.show_status = true end
+	if self.db.skin == nil then self.db.skin = "Classic" end
 
-	local frame = m.frame
-	if m.db.pos then
-		frame:SetPoint( m.db.pos.point, UIParent, m.db.pos.relative_point, m.db.pos.x, m.db.pos.y )
+	if self.db.pos then
+		self.frame:SetPoint( self.db.pos.point, UIParent, self.db.pos.relative_point, self.db.pos.x, self.db.pos.y )
 	else
-		frame:SetPoint( "Center", UIParent, "Center", 0, 200 )
+		self.frame:SetPoint( "Center", UIParent, "Center", 0, 200 )
 	end
 
-	frame:SetWidth( 100 )
-	frame:SetHeight( 50 )
-	frame:EnableMouse( true )
-	frame:SetMovable( true )
-	frame:RegisterForDrag( "LeftButton" )
-	frame:SetFrameStrata( "DIALOG" )
-	frame:Show()
+	self.frame:SetHeight( self.db.show_status and 50 or 30 )
+	self:update_skin()
+end
 
-	frame:SetScript( "OnUpdate", m.on_update )
-	frame:SetScript( "OnDragStart", function() frame:StartMoving() end )
-	frame:SetScript( "OnDragStop", function()
-		frame:StopMovingOrSizing()
+function Speedometer.events:PLAYER_ENTERING_WORLD()
+	SetMapToCurrentZone()
+	self.map_zone_id = GetCurrentMapZone()
+	self.zone_width, self.zone_height = ZONE_SIZES:get_current_zone_size()
+end
 
-		local point, _, relative_point, x, y = frame:GetPoint()
-		m.db.pos = { point = point, relative_point = relative_point, x = x, y = y }
-	end )
+function Speedometer.events:ZONE_CHANGED_NEW_AREA()
+	SetMapToCurrentZone()
+	self.map_zone_id = GetCurrentMapZone()
+	self.zone_width, self.zone_height = ZONE_SIZES:get_current_zone_size()
+end
 
-	frame:SetScript( "OnMouseUp", function()
-		if arg1 == "RightButton" then
-			m.show_dropdown()
+function Speedometer.events:ZONE_CHANGED_INDOORS()
+	if self.map_zone_id ~= GetCurrentMapZone() then
+		self.map_zone_id = GetCurrentMapZone()
+		self.zone_width, self.zone_height = ZONE_SIZES:get_current_zone_size()
+	end
+end
+
+function Speedometer.events:ZONE_CHANGED()
+	if self.map_zone_id ~= GetCurrentMapZone() then
+		self.map_zone_id = GetCurrentMapZone()
+		self.zone_width, self.zone_height = ZONE_SIZES:get_current_zone_size()
+	end
+end
+
+function Speedometer.events:PLAYER_REGEN_DISABLED()
+	self.in_combat = true
+end
+
+function Speedometer.events:PLAYER_REGEN_ENABLED()
+	self.in_combat = false
+end
+
+function Speedometer.events:PLAYER_AURAS_CHANGED()
+	local buff_index = 1
+	self.is_mounted = false
+
+	while true do
+		local texture = UnitBuff( "player", buff_index )
+		if not texture then
+			return
 		end
-	end )
 
-	m.text_speed = frame:CreateFontString( nil, "OVERLAY", "GameFontNormal" )
-	m.text_speed:SetPoint( "Top", frame, "Top", 0, -10 )
+		self.tooltip:ClearLines()
+		self.tooltip:SetUnitBuff( "player", buff_index )
 
-	m.text_status = frame:CreateFontString( nil, "OVERLAY", "GameFontNormal" )
-	m.text_status:SetPoint( "Bottom", frame, "Bottom", 0, 10 )
+		local text = self.api[ "SpeedometerTooltipTextLeft2" ]:GetText()
+		if text and (string.find( text, "Riding" ) or string.find( text, "Slow and steady..." )) then
+			self.is_mounted = true
+		end
 
-	m.update_skin()
-
-	m.dropdown = CreateFrame( "Frame", "SpeedometerDropdown", frame, "UIDropDownMenuTemplate" )
-	m.zone = GetRealZoneText()
+		buff_index = buff_index + 1
+	end
 end
 
-function Speedometer.events.ZONE_CHANGED_NEW_AREA()
-	m.zone = GetRealZoneText()
-end
-
-function Speedometer.on_update()
+function Speedometer:on_update()
 	local x, y = GetPlayerMapPosition( "player" )
+	local unit = self.db.use_metric and "m/s" or "yd/s"
 	local now = GetTime()
 
-	if m.prev_x and m.prev_y and m.prev_time then
-		local dt = now - m.prev_time
+	if x == 0 and y == 0 then
+		--self.text_speed:SetText( string.format( "Speed: %.1f %s", 0, unit ) )
+		--self.text_status:SetText( "No location data" )
+		--return
+	end
+
+	if self.prev_x and self.prev_y and self.prev_time then
+		local dt = now - self.prev_time
 		if dt > 0.1 then
-			local width, height = m.get_yards_per_map_unit()
+			local width, height = self.zone_width, self.zone_height
 
 			if not width or not height then
-				m.text_status:SetText( "No zone data" )
+				self.text_status:SetText( "No zone data" )
 				return
 			end
 
-			local dx = (x - m.prev_x) * width
-			local dy = (y - m.prev_y) * height
+			local dx = (x - self.prev_x) * width
+			local dy = (y - self.prev_y) * height
 			local dist = math.sqrt( dx * dx + dy * dy )
 			local speed = dist / dt
 
-			if speed == 0 then
-				m.speed_samples = { 0 }
-			else
-				table.insert( m.speed_samples, speed )
-				if getn( m.speed_samples ) > m.max_samples then
-					table.remove( m.speed_samples, 1 )
-				end
+			if speed < 0 or speed > 100 then
+				speed = self.speed_samples[ getn( self.speed_samples ) ]
+			end
+
+			table.insert( self.speed_samples, speed )
+			if getn( self.speed_samples ) > self.max_samples then
+				table.remove( self.speed_samples, 1 )
 			end
 
 			local total = 0
-			for _, s in ipairs( m.speed_samples ) do
+			for _, s in ipairs( self.speed_samples ) do
 				total = total + s
 			end
 
-			local avg_speed = total / getn( m.speed_samples )
-			local unit = m.db.use_metric and "m/s" or "yd/s"
-			local display_speed = m.db.use_metric and (avg_speed * 0.9144) or avg_speed
+			local avg_speed = total / getn( self.speed_samples )
+			local display_speed = self.db.use_metric and (avg_speed * 0.9144) or avg_speed
 
-			m.text_speed:SetText( string.format( "Speed: %.1f %s", display_speed, unit ) )
-			m.update_status( now, avg_speed )
+			self.text_speed:SetText( string.format( "S: %.1f %s", display_speed, unit ) )
+			self:update_status( now, avg_speed)
 
-			m.prev_x, m.prev_y, m.prev_time = x, y, now
+			self.prev_x, self.prev_y, self.prev_time = x, y, now
 		end
 	else
-		m.prev_x, m.prev_y, m.prev_time = x, y, now
+		self.prev_x, self.prev_y, self.prev_time = x, y, now
 	end
 end
 
@@ -136,17 +167,21 @@ function Speedometer.dropdown_initialize( level )
 
 	if level == 1 then
 		info.text = m.db.use_metric and "Use Imperial (yards)" or "Use Metric (meters)"
-		info.func = function()
-			m.db.use_metric = not m.db.use_metric
+		info.arg1 = "use_metric"
+		info.func = function( setting )
+			m.db[ setting ] = not m.db[ setting ]
 		end
+		UIDropDownMenu_AddButton( info )
+
+		info.text = "Show status"
+		info.arg1 = "show_status"
+		info.checked = m.db.show_status
 		UIDropDownMenu_AddButton( info )
 
 		---@diagnostic disable-next-line: undefined-global
 		if gOutfitter_Settings then
 			info.text = "Autoequip \"Swimming\" outfit"
-			info.func = function()
-				m.db.autoequip_swimming = not m.db.autoequip_swimming
-			end
+			info.arg1 = "autoequip_swimming"
 			info.checked = m.db.autoequip_swimming
 			UIDropDownMenu_AddButton( info )
 		end
@@ -167,7 +202,7 @@ function Speedometer.dropdown_initialize( level )
 		info.checked = m.db.skin == info.arg1
 		info.func = function( skin )
 			m.db.skin = skin
-			m.update_skin()
+			m:update_skin()
 			CloseDropDownMenus()
 		end
 		UIDropDownMenu_AddButton( info, level )
@@ -179,13 +214,13 @@ function Speedometer.dropdown_initialize( level )
 	end
 end
 
-function Speedometer.show_dropdown()
-	UIDropDownMenu_Initialize( m.dropdown, m.dropdown_initialize, "MENU" )
-	ToggleDropDownMenu( 1, nil, m.dropdown, "cursor", 0, 0 )
+function Speedometer:show_dropdown()
+	UIDropDownMenu_Initialize( self.dropdown, self.dropdown_initialize, "MENU" )
+	ToggleDropDownMenu( 1, nil, self.dropdown, "cursor", 0, 0 )
 end
 
 function Speedometer.handle_slash( args )
-	if not args then
+	if not args or args == "" then
 		if m.frame:IsShown() then
 			m.frame:Hide()
 		else
@@ -195,17 +230,17 @@ function Speedometer.handle_slash( args )
 	end
 
 	if string.find( args, "^size" ) then
-		local w, h = string.match( args, "^size (%d*) (%d*)" )
-		m.zone_sizes[ m.zone ].width = w
-		m.zone_sizes[ m.zone ].height = h
+		local w, h = string.match( args, "^size (.*) (.*)" )
+		m.zone_width = w
+		m.zone_height = h
 	end
 end
 
-function Speedometer.update_skin()
-	local skin = m.db.skin
+function Speedometer:update_skin()
+	local skin = self.db.skin
 
 	if skin == "Classic" then
-		m.frame:SetBackdrop( {
+		self.frame:SetBackdrop( {
 			bgFile = "Interface/Tooltips/UI-Tooltip-Background",
 			edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
 			tile = true,
@@ -213,25 +248,40 @@ function Speedometer.update_skin()
 			edgeSize = 16,
 			insets = { left = 4, right = 4, top = 4, bottom = 4 }
 		} )
-		m.frame:SetBackdropColor( 0, 0, 0, 0.8 )
+		self.frame:SetBackdropColor( 0, 0, 0, 0.8 )
 	elseif skin == "Flat" then
-		m.frame:SetBackdrop( {
+		self.frame:SetBackdrop( {
 			bgFile = "Interface/Buttons/WHITE8x8",
 			edgeFile = "Interface/Buttons/WHITE8x8",
 			edgeSize = 0.8,
 		} )
-		m.frame:SetBackdropColor( 0, 0, 0, 0.8 )
-		m.frame:SetBackdropBorderColor( 0.2, 0.2, 0.2, 1 )
+		self.frame:SetBackdropColor( 0, 0, 0, 0.8 )
+		self.frame:SetBackdropBorderColor( 0.2, 0.2, 0.2, 1 )
 	end
 end
 
-function Speedometer.update_status( current_time, speed )
-	local new_state = m.classify_speed( speed or 0 )
-	local sdb = m.status_debounce
+---@param current_time number
+---@param speed number
+function Speedometer:update_status( current_time, speed )
+	if self.db.show_status and not self.text_status:IsShown() then
+		self.frame:SetHeight( 50 )
+		self.text_status:Show()
+	elseif not self.db.show_status then
+		if self.text_status:IsShown() then
+			self.frame:SetHeight( 30 )
+			self.text_status:Hide()
+		end
+		return
+	end
+
+	local new_state = self.classify_speed( speed or 0 )
+	local sdb = self.status_debounce
 
 	-- Keep flying until we stand still
 	if sdb.previous == "Flying" and new_state ~= "Standing" then
 		return
+	elseif self.is_mounted then
+		new_state = "Mounted"
 	end
 
 	if sdb.candidate ~= new_state then
@@ -240,10 +290,10 @@ function Speedometer.update_status( current_time, speed )
 	elseif current_time - m.status_debounce.start_time >= 0.7 then
 		if sdb.current ~= sdb.candidate then
 			sdb.current = sdb.candidate
-			m.text_status:SetText( sdb.current )
+			self.text_status:SetText( sdb.current )
 
 			if sdb.current == "Swimming" or sdb.previous == "Swimming" then
-				m.outfitter_swimming( sdb.current == "Swimming" )
+				self.outfitter_swimming( sdb.current == "Swimming" )
 			end
 
 			sdb.previous = sdb.current
@@ -251,23 +301,16 @@ function Speedometer.update_status( current_time, speed )
 	end
 end
 
-function Speedometer.get_yards_per_map_unit()
-	local data = m.zone_sizes[ m.zone ]
-	if not data then return nil end
-
-	return data.width, data.height
-end
-
 function Speedometer.classify_speed( speed )
 	if speed < 0.1 then
-		return "Standing"
+		return m.in_combat and "In combat" or "Standing"
 	elseif speed < 3 then
 		return "Walking"
 	elseif speed < 4.6 then
 		return "Moonwalking"
 	elseif speed < 6.6 then
 		return "Swimming"
-	elseif speed < 10 then
+	elseif speed < 14 then
 		return "Running"
 	elseif speed < 20 then
 		return "Mounted"
@@ -297,6 +340,45 @@ function Speedometer.outfitter_swimming( equip )
 			Outfitter_WearOutfit( vOutfit )
 		end
 	end
+end
+
+function Speedometer:create_frame()
+	local frame = CreateFrame( "Frame", "SpeedometerFrame", UIParent )
+	frame:SetWidth( 100 )
+	frame:EnableMouse( true )
+	frame:SetMovable( true )
+	frame:RegisterForDrag( "LeftButton" )
+	frame:SetFrameStrata( "DIALOG" )
+	frame:Show()
+
+	frame:SetScript( "OnUpdate", function() self:on_update() end )
+	frame:SetScript( "OnDragStart", function() frame:StartMoving() end )
+	frame:SetScript( "OnDragStop", function()
+		frame:StopMovingOrSizing()
+
+		local point, _, relative_point, x, y = frame:GetPoint()
+		self.db.pos = { point = point, relative_point = relative_point, x = x, y = y }
+	end )
+
+	frame:SetScript( "OnMouseUp", function()
+		if arg1 == "RightButton" then
+			self:show_dropdown()
+		end
+	end )
+
+	frame:SetScript( "OnEvent", function()
+		if self.events[ event ] then
+			self.events[ event ]( self )
+		end
+	end )
+
+	self.text_speed = frame:CreateFontString( nil, "OVERLAY", "GameFontNormal" )
+	self.text_speed:SetPoint( "Top", frame, "Top", 0, -10 )
+
+	self.text_status = frame:CreateFontString( nil, "OVERLAY", "GameFontNormal" )
+	self.text_status:SetPoint( "Bottom", frame, "Bottom", 0, 10 )
+
+	return frame
 end
 
 Speedometer:init()

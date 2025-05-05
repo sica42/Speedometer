@@ -4,7 +4,9 @@
     "_",
     "arg1", 
     "event",
-    "getn"
+    "getn",
+    "mod",
+    "this"
   ],
   "Lua.runtime.version": "Lua 5.1",
   "Lua.workspace.checkThirdParty": false,
