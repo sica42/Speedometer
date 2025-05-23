@@ -152,7 +152,7 @@ function Speedometer:on_update()
 			local avg_speed = total / getn( self.speed_samples )
 			local display_speed = self.db.use_metric and (avg_speed * 0.9144) or avg_speed
 
-			self.text_speed:SetText( string.format( "S: %.1f %s", display_speed, unit ) )
+			self.text_speed:SetText( string.format( "Speed: %.1f %s", display_speed, unit ) )
 			self:update_status( now, avg_speed)
 
 			self.prev_x, self.prev_y, self.prev_time = x, y, now
@@ -343,8 +343,13 @@ function Speedometer.outfitter_swimming( equip )
 end
 
 function Speedometer:create_frame()
+	local width = 120
+	---@diagnostic disable-next-line: undefined-global
+	if IsAddOnLoaded( "pfUI" ) and pfUI and pfUI.api and pfUI.env and pfUI.env.C then
+		width = 100
+	end
 	local frame = CreateFrame( "Frame", "SpeedometerFrame", UIParent )
-	frame:SetWidth( 100 )
+	frame:SetWidth( width )
 	frame:EnableMouse( true )
 	frame:SetMovable( true )
 	frame:RegisterForDrag( "LeftButton" )
@@ -379,6 +384,13 @@ function Speedometer:create_frame()
 	self.text_status:SetPoint( "Bottom", frame, "Bottom", 0, 10 )
 
 	return frame
+end
+
+string.match = string.match or function( str, pattern )
+	if not str then return nil end
+
+	local _, _, r1, r2, r3, r4, r5, r6, r7, r8, r9 = string.find( str, pattern )
+	return r1, r2, r3, r4, r5, r6, r7, r8, r9
 end
 
 Speedometer:init()

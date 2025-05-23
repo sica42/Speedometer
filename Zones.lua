@@ -30,7 +30,7 @@ end
 function ZONE_SIZES:get_current_zone_size()
 	self.current_zone = GetRealZoneText()
 	self.current_continent = GetCurrentMapContinent() == 1 and "Kalimdor" or "Eastern Kingdoms"
-	local width, height = self:get_size( self.current_zone, GetCurrentMapZone() <= 1 )
+	local width, height = self:get_size( self.current_zone, GetCurrentMapZone() == 1 )
 
 	if not width then
 		width, height = self:get_size( self.current_continent )
@@ -136,7 +136,7 @@ ZONE_SIZES.data = {
 				height = 695.833312988286,
 				width = 1043.749938964844,
 			},
-			[ "Ungoro Crater" ] = {
+			[ "Un'Goro Crater" ] = {
 				height = 2466.66650390625,
 				width = 3699.9998168945312,
 			},
@@ -146,6 +146,10 @@ ZONE_SIZES.data = {
 			},
 		},
 		dungeons = {
+			[ "Dire Maul" ] = {
+				height = 850,
+				width = 1275,
+			},
 			[ "Emerald Sanctum" ] = {
 				height = 853.72,
 				width = 1273.1,
@@ -153,6 +157,10 @@ ZONE_SIZES.data = {
 			[ "Naxxramas" ] = {
 				height = 1318.42,
 				width = 1991.69,
+			},
+			[ "Maraudon" ] = {
+				height = 1410.89,
+				width = 2112.09,
 			},
 			[ "Onyxia's Lair" ] = {
 				height = 322.08,
@@ -176,7 +184,15 @@ ZONE_SIZES.data = {
 			},
 		},
 		entrances = {
+			[ "Dire Maul" ] = {
+				-- Uses continent size
+			},
+			[ "Maraudon" ] = {
+				height = 550,
+				width = 824,
+			},
 			[ "Razorfen Downs" ] = {
+				-- Uses continent size
 			},
 			[ "Wailing Caverns" ] = {
 				height = 381.85,
@@ -271,6 +287,10 @@ ZONE_SIZES.data = {
 			[ "Redridge Mountains" ] = {
 				height = 1447.916015625,
 				width = 2170.83325195312,
+			},
+			[ "Scarlet Enclave" ] = {
+				height = 2108,
+				width = 3159,
 			},
 			[ "Searing Gorge" ] = {
 				height = 1487.49951171875,
