@@ -59,6 +59,7 @@ function Speedometer.events:PLAYER_ENTERING_WORLD()
   SetMapToCurrentZone()
   self.map_zone_id = GetCurrentMapZone()
   self.zone_width, self.zone_height = ZONE_SIZES:get_current_zone_size()
+  self.in_combat = false
 end
 
 function Speedometer.events:ZONE_CHANGED_NEW_AREA()
@@ -387,13 +388,6 @@ function Speedometer:create_frame()
   self.text_status:SetPoint( "Bottom", frame, "Bottom", 0, 10 )
 
   return frame
-end
-
-string.match = string.match or function( str, pattern )
-  if not str then return nil end
-
-  local _, _, r1, r2, r3, r4, r5, r6, r7, r8, r9 = string.find( str, pattern )
-  return r1, r2, r3, r4, r5, r6, r7, r8, r9
 end
 
 Speedometer:init()
