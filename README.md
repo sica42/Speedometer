@@ -18,7 +18,7 @@ Right click the frame to show options.
   * You have to create an outfit called "Swimming"
   * Enable auto equip by right clicking the window and toggle the option on
   * If you have high swimming speed with your swimming outfit equipped, do not enable auto unequip as it will unequip the outfit when you swim to fast.
-  * You can enable unequip swimming outfit when clicking Speedometer window by typing `/sm click`
+  * For easy unequip, type `/sm click` to enable unequip swimming outfit when clicking the Speedometer window
 * Has both classic and flat skin
 * Toggle windows by typing `/sm`
 
