@@ -105,7 +105,7 @@ ZONE_SIZES.data = {
         height = 3424.999847412109,
         width = 5137.49987792969,
       },
-      [ "Ogrimmar" ] = {
+      [ "Orgrimmar" ] = {
         height = 935.41662597657,
         width = 1402.6044921875,
       },
