@@ -1,7 +1,7 @@
 ## Interface: 11200
 ## Title: Speedometer
 ## Author: Sica
-## Version: 0.5.1
+## Version: 0.6
 ## Notes: Shows your current running speed
 ## SavedVariablesPerCharacter: SpeedometerDB
 

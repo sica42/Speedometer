@@ -17,6 +17,7 @@ function Speedometer:init()
   self.max_samples = 5
   self.in_combat = false
   self.is_mounted = false
+  self.plainsrunning = 0
   self.on_boat = nil
   self.zone_width = 0
   self.zone_height = 0
@@ -93,6 +94,7 @@ end
 function Speedometer.events:PLAYER_AURAS_CHANGED()
   local buff_index = 1
   self.is_mounted = false
+  self.plainsrunning = 0
 
   while true do
     local texture = UnitBuff( "player", buff_index )
@@ -103,7 +105,12 @@ function Speedometer.events:PLAYER_AURAS_CHANGED()
     self.tooltip:ClearLines()
     self.tooltip:SetUnitBuff( "player", buff_index )
 
-    local text = self.api[ "SpeedometerTooltipTextLeft2" ]:GetText()
+    local text = self.api[ "SpeedometerTooltipTextLeft1" ]:GetText()
+    if text and (string.find( text, "Plainsrunning" )) then
+      self.plainsrunning = self.plainsrunning + 1
+    end
+
+    text = self.api[ "SpeedometerTooltipTextLeft2" ]:GetText()
     if text and (string.find( text, "Riding" ) or string.find( text, "Slow and steady..." )) then
       self.is_mounted = true
     end
@@ -285,6 +292,8 @@ function Speedometer:update_status( current_time, speed )
     return
   elseif self.is_mounted then
     new_state = "Mounted"
+  elseif self.plainsrunning > 0 and new_state == "Running" then
+    new_state = "Plainsrunning" .. string.rep("+", self.plainsrunning-1)
   end
 
   if sdb.candidate ~= new_state then
